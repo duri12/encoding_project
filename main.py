@@ -1,4 +1,5 @@
 import itertools
+from tqdm import tqdm
 
 # Parameters for the SHC: n cells, l levels, k bits.
 n = 2  # number of cells per codeword
@@ -80,10 +81,10 @@ def main():
     print(f"Possible D functions: {len(candidate_Ds)}, Candidate pairs per bit: {len(candidate_pairs)}")
 
     valid_solutions = []
+    total_combinations = len(candidate_pairs) ** k
 
-    # Iterate over all possible combinations of k pairs
-    # This is computationally intensive for large k or candidate_pairs!
-    for candidate_solution in itertools.product(candidate_pairs, repeat=k):
+    # Iterate over all possible combinations of k pairs with a progress bar
+    for candidate_solution in tqdm(itertools.product(candidate_pairs, repeat=k), total=total_combinations, desc="Searching"):
         mapping_dict = mapping(candidate_solution)
         if is_surjective(mapping_dict):
             avg_reads = average_reads(candidate_solution)
