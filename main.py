@@ -4,15 +4,21 @@ import math
 
 # Parameters for the SHC: n cells, l levels, k bits.
 n = 2  # number of cells per codeword
-l = 4  # levels
+l = 4 # levels
 k = 4  # number of bits to store
 
-# Generate candidate thresholds dynamically based on l (1 to l-1 as singletons + empty)
-candidate_thresholds = [frozenset()]
-for r in range(1, l):
-    candidate_thresholds.append(frozenset({r}))
+MAX_THRESHOLDS_NUM = l #NOTE: set the maximal amount of threshold for a bit in a cell.
+# possible inner-groups for R (single cell): only singletons and empty set.
+# candidate_thresholds = [frozenset()]
+# for r in range(1, l):
+#     candidate_thresholds.append(frozenset({r}))
 
-# All possible assignments of thresholds for n cells.
+s = list(range(1, l))
+
+candidate_thresholds = [frozenset(subset) for r in range(MAX_THRESHOLDS_NUM+1) for subset in itertools.combinations(s, r)]
+print(candidate_thresholds)
+
+# get all values for R.
 candidate_Rs = list(itertools.product(candidate_thresholds, repeat=n))
 
 # Generate all possible decoding functions D: {0,1}^n -> {0,1}.
@@ -21,18 +27,23 @@ def generate_candidate_D(n):
     size = 2 ** n
     candidates = []
     for bits in itertools.product([0, 1], repeat=size):
-        if not (all(b == bits[0] for b in bits)):# check if the function is not a constant
+        if not (all(b == bits[0] for b in bits)):# is constant function? i.e. f(i) == f(0) for every i
             candidates.append(bits)
     return candidates
 
+#on which bits does d not depend on
+def d_not_depend_on(candidate_d):
+    num_of_bits = n
+    f = candidate_d
+    dependent_bits = set()
+    for bit in range(num_of_bits):
+        for i in range(len(f)): # all indexes
+            j = i ^ (1 << bit)  # Flip the `bit`-th position
+            if j > i and f[i] != f[j]:
+                dependent_bits.add(bit)
+    not_dependent_bits = set(range(num_of_bits)) - dependent_bits
+    return not_dependent_bits
 
-candidate_Ds = generate_candidate_D(n)
-
-# Candidate pairs are combinations of R and D
-candidate_pairs = list(itertools.product(candidate_Rs, candidate_Ds)) #TODO: check redundant groups and switch them to empty
-
-
-# Decision function (Algorithm 1)
 def decision(v, R):
     b = 1
     for r in sorted(R):
@@ -66,6 +77,42 @@ def is_surjective(mapping_dict):
     return len(outputs) == 2 ** k
 
 
+def check_prop1(candidate_r,candidate_d):
+    counters =[0,0]
+    THRESHOLD = pow(2,k-1)
+    # print(candidate_d, candidate_r)
+    for v in itertools.product(range(l), repeat=n):
+        out = decode_bit((candidate_r,candidate_d), v)
+        # print(v,out)
+        counters[out] += 1
+        if counters[0] >= THRESHOLD and counters[1] >= THRESHOLD:
+            return True
+    return False
+
+candidate_Ds = generate_candidate_D(n)
+
+
+# Candidate pairs are combinations of R and D
+candidate_pairs_original = list(itertools.product(candidate_Rs, candidate_Ds)) #TODO: check redundant groups and switch them to empty
+candidate_pairs = []
+for d in candidate_Ds:
+    not_dependent_bits = d_not_depend_on(d)
+    for r in candidate_Rs:
+        new_r = list(r)
+        #optimization NEW 1: remove unnecessary R
+        for bit in not_dependent_bits:
+            new_r[bit] = frozenset()
+        
+        #optimization PAPER 1: check surjective of R & D.
+        if not check_prop1(new_r, d):
+            continue
+        if (new_r,d) not in candidate_pairs:
+            candidate_pairs.append((new_r, d))
+
+print("After applying acceleration ",len(candidate_pairs))
+print("Before applying acceleration ",len(candidate_pairs_original))
+
+# Decision function (Algorithm 1)
 # Calculate average number of reads per bit
 def average_reads(candidate_solution):
     total_reads = 0
