@@ -13,6 +13,7 @@ def generate_candidate_thresholds(l):
     for r in range(MIN_THRESHOLDS_NUM, MAX_THRESHOLDS_NUM + 1):
         thresholds = []
         for batch_start in range(0, math.comb(len(s), r), BATCH_SIZE):
+            # Generate a batch of combinations of r thresholds from s
             thresholds += [frozenset(subset) for subset in itertools.islice(itertools.combinations(s, r), batch_start, batch_start + BATCH_SIZE)]
         random.shuffle(thresholds)
         yield thresholds
@@ -22,8 +23,10 @@ def generate_candidate_D(n):
     seen = set()
     candidates = []
     for bits in itertools.product([0, 1], repeat=size):
+        # Skip constant vectors
         if all(b == bits[0] for b in bits):
             continue
+        # Use symmetry to avoid duplicates (bitwise negation)
         min_form = min(bits, tuple(1 - b for b in bits))
         if min_form not in seen:
             seen.add(min_form)
@@ -41,14 +44,18 @@ def decision(v, R):
 
 def decode_bit(candidate_pair, v):
     R, D = candidate_pair
+    # Compute each bit using the threshold sets
     bits = [decision(v[j], R[j]) for j in range(len(v))]
+    # Convert bit vector to an index for D
     index = sum(bits[j] * (2 ** j) for j in range(len(v)))
     return D[index]
 
 def mapping(candidate_pairs_list, n, l):
+    # Create a mapping from input vectors to output k-bit vectors
     return {v: tuple(decode_bit(candidate_pairs_list[i], v) for i in range(len(candidate_pairs_list))) for v in itertools.product(range(l), repeat=n)}
 
 def is_surjective(mapping_dict, k):
+    # Check if all 2^k possible outputs are covered
     return len(set(mapping_dict.values())) == 2 ** k
 
 def check_prop1(candidate_r, candidate_d, n, l, k):
@@ -57,6 +64,7 @@ def check_prop1(candidate_r, candidate_d, n, l, k):
     for v in itertools.product(range(l), repeat=n):
         out = decode_bit((candidate_r, candidate_d), v)
         counters[out] += 1
+        # Check if both outputs appear at least 2^(k-1) times
         if counters[0] >= THRESHOLD and counters[1] >= THRESHOLD:
             return True
     return False
@@ -77,6 +85,7 @@ def generate_candidate_pairs(n, l, k, candidate_Ds):
     return candidate_pairs
 
 def average_reads(candidate_solution):
+    # Maximum number of thresholds used for any individual read operation
     return max(len(r) for R, _ in candidate_solution for r in R)
 
 def main():

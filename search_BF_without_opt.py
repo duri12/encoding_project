@@ -19,11 +19,13 @@ def decision(v, R):
 def is_balanced(R):
     mask = 0
     for v in CELL_VALUES:
+        # Build output vector as a bitmask
         mask |= decision(v, R) << v
-    return bin(mask).count('1') == 16
+    return bin(mask).count('1') == 16  # Balanced: exactly half 1s out of 32 possible cells
 
 @lru_cache(maxsize=1024)
 def is_minimal(R):
+    # Check that no proper subset of R is still balanced
     for r in R:
         reduced = tuple(sorted(set(R) - {r}))
         if reduced and is_balanced(reduced):
@@ -32,8 +34,9 @@ def is_minimal(R):
 
 def generate_candidates():
     candidates = []
-    for size in range(1, MAX_THRESHOLDS_NUM + 1, 2):
+    for size in range(1, MAX_THRESHOLDS_NUM + 1, 2):  # Only odd sizes for balance
         for combo in itertools.combinations(range(1, 31), size):
+            # Heuristic filtering: thresholds should span early to late range
             if combo[0] > 2 or combo[-1] < 30:
                 continue
             if is_balanced(combo) and is_minimal(combo):
@@ -44,8 +47,10 @@ def process_chunk(chunk):
     results = []
     for i in chunk:
         R, D = candidate_pairs[i]
+        # Build output bit vector, normalized so D[0] maps to 0
         vec = sum((decision(v, R) ^ D[0]) << v for v in CELL_VALUES)
         unique_bits = bin(vec).count('1')
+        # Keep configurations with good diversity
         if unique_bits >= 10:
             results.append((i, vec))
     return len(chunk), results
@@ -62,6 +67,7 @@ def parallel_search():
                 for result in pool.imap_unordered(process_chunk, chunks):
                     pbar.update(result[0])
                     valid.extend(result[1])
+        # Sort results by how balanced the output vector is (more 1s = better)
         valid.sort(key=lambda x: bin(x[1]).count('1'), reverse=True)
 
 def init_pool(progress_ref):
@@ -82,9 +88,9 @@ if __name__ == "__main__":
     l = args.l
     k = args.k
 
-    CELL_VALUES = list(range(l))
+    CELL_VALUES = list(range(l))  # Domain of cell input values
     R_candidates = generate_candidates()
-    D_mappings = [(0, 1), (1, 0)]
+    D_mappings = [(0, 1), (1, 0)]  # Only non-constant binary mappings
     candidate_pairs = [(r, d) for r in R_candidates for d in D_mappings]
 
     if parallel_search():
