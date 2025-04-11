@@ -2,45 +2,33 @@ import itertools
 import random
 from tqdm import tqdm
 import math
+import argparse
 
-# Parameters for the SHC: n cells, l levels, k bits.
-n = 1  # number of cells per codeword
-l = 32  # levels
-k = 5  # number of bits to store
+MAX_THRESHOLDS_NUM = 18
+MIN_THRESHOLDS_NUM = 1
+BATCH_SIZE = 10000
 
-MAX_THRESHOLDS_NUM = 7  # Max number of thresholds per bit
-MIN_THRESHOLDS_NUM = 6  # Minimum number of thresholds per bit (new parameter)
-BATCH_SIZE = 10000  # Process threshold combinations in batches
-
-
-def generate_candidate_thresholds():
-    """Generate threshold sets in batches to avoid MemoryError."""
+def generate_candidate_thresholds(l):
     s = list(range(1, l))
-    for r in range(MIN_THRESHOLDS_NUM, MAX_THRESHOLDS_NUM + 1):  # Start from MIN_THRESHOLDS_NUM
+    for r in range(MIN_THRESHOLDS_NUM, MAX_THRESHOLDS_NUM + 1):
         thresholds = []
         for batch_start in range(0, math.comb(len(s), r), BATCH_SIZE):
-            thresholds += [frozenset(subset) for subset in
-                           itertools.islice(itertools.combinations(s, r), batch_start, batch_start + BATCH_SIZE)]
-        random.shuffle(thresholds)  # Shuffle the thresholds to introduce randomness
+            thresholds += [frozenset(subset) for subset in itertools.islice(itertools.combinations(s, r), batch_start, batch_start + BATCH_SIZE)]
+        random.shuffle(thresholds)
         yield thresholds
 
-
 def generate_candidate_D(n):
-    """Generate non-constant D functions, considering symmetries."""
     size = 2 ** n
     seen = set()
     candidates = []
-
     for bits in itertools.product([0, 1], repeat=size):
         if all(b == bits[0] for b in bits):
             continue
-
         min_form = min(bits, tuple(1 - b for b in bits))
         if min_form not in seen:
             seen.add(min_form)
             candidates.append(bits)
     return candidates
-
 
 def decision(v, R):
     b = 1
@@ -51,26 +39,21 @@ def decision(v, R):
             break
     return b
 
-
 def decode_bit(candidate_pair, v):
     R, D = candidate_pair
-    bits = [decision(v[j], R[j]) for j in range(n)]
-    index = sum(bits[j] * (2 ** j) for j in range(n))
+    bits = [decision(v[j], R[j]) for j in range(len(v))]
+    index = sum(bits[j] * (2 ** j) for j in range(len(v)))
     return D[index]
 
+def mapping(candidate_pairs_list, n, l):
+    return {v: tuple(decode_bit(candidate_pairs_list[i], v) for i in range(len(candidate_pairs_list))) for v in itertools.product(range(l), repeat=n)}
 
-def mapping(candidate_pairs_list):
-    return {v: tuple(decode_bit(candidate_pairs_list[i], v) for i in range(k))
-            for v in itertools.product(range(l), repeat=n)}
-
-
-def is_surjective(mapping_dict):
+def is_surjective(mapping_dict, k):
     return len(set(mapping_dict.values())) == 2 ** k
 
-
-def check_prop1(candidate_r, candidate_d):
+def check_prop1(candidate_r, candidate_d, n, l, k):
     counters = [0, 0]
-    THRESHOLD = pow(2, k - 1)
+    THRESHOLD = 2 ** (k - 1)
     for v in itertools.product(range(l), repeat=n):
         out = decode_bit((candidate_r, candidate_d), v)
         counters[out] += 1
@@ -78,46 +61,53 @@ def check_prop1(candidate_r, candidate_d):
             return True
     return False
 
-
-candidate_Ds = generate_candidate_D(n)
-
-
-def generate_candidate_pairs(n, candidate_Ds):
+def generate_candidate_pairs(n, l, k, candidate_Ds):
     seen_canonical = set()
     candidate_pairs = []
-
-    for candidate_thresholds_batch in generate_candidate_thresholds():
-        random.shuffle(candidate_Ds)  # Shuffle the D functions to add randomness
+    for candidate_thresholds_batch in generate_candidate_thresholds(l):
+        random.shuffle(candidate_Ds)
         for d in candidate_Ds:
             for r in itertools.product(candidate_thresholds_batch, repeat=n):
-                if check_prop1(r, d):
+                if check_prop1(r, d, n, l, k):
                     canonical_form = (tuple(r), tuple(d))
                     if canonical_form not in seen_canonical:
                         seen_canonical.add(canonical_form)
                         candidate_pairs.append((r, d))
-    random.shuffle(candidate_pairs)  # Shuffle candidate pairs to randomize the selection order
+    random.shuffle(candidate_pairs)
     return candidate_pairs
-
 
 def average_reads(candidate_solution):
     return max(len(r) for R, _ in candidate_solution for r in R)
 
-
 def main():
+    parser = argparse.ArgumentParser(description="Search for SHC(n, l, k) codes.")
+    parser.add_argument("--n", type=int, required=True, help="Number of dimensions")
+    parser.add_argument("--l", type=int, required=True, help="Alphabet size per dimension")
+    parser.add_argument("--k", type=int, required=True, help="Number of output bits")
+    args = parser.parse_args()
+
+    n = args.n
+    l = args.l
+    k = args.k
+
+    if n < 1 or l < 2 or k < 1:
+        raise ValueError("n must be >= 1, l >= 2, k >= 1")
+
     print(f"Searching for SHC({n}, {l}, {k})")
-    candidate_pairs = generate_candidate_pairs(n, candidate_Ds)
+
+    candidate_Ds = generate_candidate_D(n)
+    candidate_pairs = generate_candidate_pairs(n, l, k, candidate_Ds)
     print(f"Candidate pairs: {len(candidate_pairs)}")
 
     min_reads = float('inf')
-    total_combinations = min(90000000, math.comb(len(candidate_pairs), k))  # Limit search space
+    total_combinations = math.comb(len(candidate_pairs), k)
 
-    for candidate_solution in tqdm(itertools.combinations(candidate_pairs, k), total=total_combinations,
-                                   desc="Searching"):
+    for candidate_solution in tqdm(itertools.combinations(candidate_pairs, k), total=total_combinations, desc="Searching"):
         avg_reads = average_reads(candidate_solution)
         if avg_reads > min_reads:
             continue
-        mapping_dict = mapping(candidate_solution)
-        if is_surjective(mapping_dict):
+        mapping_dict = mapping(candidate_solution, n, l)
+        if is_surjective(mapping_dict, k):
             print("\nValid Solution Found:")
             for i, (R, D) in enumerate(candidate_solution, 1):
                 print(f"Bit {i}: R={[set(r) for r in R]}, D={D}")
@@ -125,7 +115,6 @@ def main():
             min_reads = avg_reads
 
     print(f"\nBest average reads per bit: {min_reads}")
-
 
 if __name__ == '__main__':
     main()
