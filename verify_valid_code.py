@@ -14,7 +14,6 @@ def decode_bits(cell_levels, shc):
     for R, D in shc:
         # Apply decision rule for each cell level using its threshold set
         decision_bits = [decision(cell_levels[i], R[i]) for i in range(len(R))]
-        # Convert binary vector to index
         index = sum(bit << i for i, bit in enumerate(decision_bits))
         bits.append(D[index])
     return tuple(bits)
@@ -31,7 +30,6 @@ def is_valid_shc(shc, n, l, k):
 def average_reads_per_bit(shc):
     total = 0
     for R, _ in shc:
-        # Each bit reads the cell with the largest number of thresholds
         max_thresholds = max(len(cell_thresholds) for cell_thresholds in R)
         total += max_thresholds
     return total / len(shc)
