@@ -45,7 +45,7 @@ python search_BF_with_opt.py --n <number_of_cells> --l <alphabet_size> --k <numb
 where:
 - `--n` = number of cells (dimensions),
 - `--l` = number of levels per cell (alphabet size),
-- `--k` = number of bits to encode.
+- `--k` = number of decoded bits.
 
 ### Example
 
