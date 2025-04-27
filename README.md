@@ -27,11 +27,34 @@ This project searches for valid **SHC(n, l, k)** codes—mappings from multi-dim
 ---
 
 ### `verify_valid_code.py`
-
+(inner tool)
 Validates any SHC config:
 - Surjectivity check
 - Average read cost
 ---
+
+
+## How to Use
+
+To run the exhaustive search script for finding SHC codes, execute `search_BF_with_opt.py` from the command line with the following required arguments:
+
+```bash
+python search_BF_with_opt.py --n <number_of_cells> --l <alphabet_size> --k <number_of_output_bits>
+```
+
+where:
+- `--n` = number of cells (dimensions),
+- `--l` = number of levels per cell (alphabet size),
+- `--k` = number of bits to encode.
+
+### Example
+
+```bash
+python search_BF_with_opt.py --n 1 --l 8 --k 3
+```
+
+This command will search for an SHC(1,8,3) code using the optimized search algorithm.
+
 
 ## Requirements
 
